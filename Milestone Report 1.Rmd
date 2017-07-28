@@ -1,0 +1,114 @@
+---
+title: 'Milestone #1'
+author: "Clark Porter"
+date: "July 26, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading the Data
+
+First the data must be loaded along with any required libraries. This will be done by downloading the data from the below link and using the following code:
+
+[link](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip)
+
+
+```{r load}
+library(tm)
+library(stringi)
+library(RWeka)
+library(ggplot2)
+# set directory
+setwd("C:/Users/cporter01/Desktop/Coursera/final/en_US")
+# twitter
+twitter <- readLines(con <- file("./en_US.twitter.txt"), encoding = "UTF-8", skipNul = TRUE)
+close(con)
+# blogs
+blog <- readLines(con <- file("./en_US.blogs.txt"), encoding = "UTF-8", skipNul = TRUE)
+close(con)
+# news
+news <- readLines(con <- file("./en_US.news.txt"), encoding = "UTF-8", skipNul = TRUE)
+close(con)
+```
+
+## Data Summary
+
+Now we look at some of the basic features of the data. We look at the file sizes, number of words, and number of lines in each file.
+
+```{r explore}
+# file sizes
+blogs.size <- file.info("final/en_US/en_US.blogs.txt")$size / 1024 ^ 2
+news.size <- file.info("final/en_US/en_US.news.txt")$size / 1024 ^ 2
+twitter.size <- file.info("final/en_US/en_US.twitter.txt")$size / 1024 ^ 2
+
+# words in files
+blogs.words <- stri_count_words(blogs)
+news.words <- stri_count_words(news)
+twitter.words <- stri_count_words(twitter)
+```
+
+## Data Cleaning
+
+Below, we will take a small section of the data and clean it by removing all extra characters and making the date ready to manipulate for analysis.
+
+```{r clean}
+# Sample
+set.seed(777)
+data.sample <- c(sample(blogs, length(blogs)/ 100),
+                 sample(news, length(news)/ 100),
+                 sample(twitter, length(twitter)/ 100))
+
+# Clean
+samp <- VCorpus(VectorSource(data.sample))
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+samp <- tm_map(samp, toSpace, "(f|ht)tp(s?)://(.*)[.][a-z]+")
+samp <- tm_map(samp, toSpace, "@[^\\s]+")
+samp <- tm_map(samp, tolower)
+samp <- tm_map(samp, removeWords, stopwords("en"))
+samp <- tm_map(samp, removePunctuation)
+samp <- tm_map(samp, removeNumbers)
+samp <- tm_map(samp, stripWhitespace)
+samp <- tm_map(samp, PlainTextDocument)
+```
+
+## Data Exploration
+
+Now I will explore the n-grams of the data and plot the results.
+
+First, I will need to use the RWeka package to "tokenize" and create the functions responsbile for creating the n-grams. I can then find the frequency at which all of these n-grams occur and visualize them.
+
+```{r pre vis}
+unigram  <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
+bigram   <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+trigram  <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+
+uniGramMatrix <- TermDocumentMatrix(samp, control = list(tokenize = unigram))
+biGramMatrix  <- TermDocumentMatrix(samp, control = list(tokenize =  bigram))
+triGramMatrix <- TermDocumentMatrix(samp, control = list(tokenize = trigram))
+
+freq_uni <- sort(rowSums(as.matrix(uniGramMatrix)), decreasing = TRUE)
+freq_bi <- sort(rowSums(as.matrix(biGramMatrix)) , decreasing = TRUE)
+freq_tri <- sort(rowSums(as.matrix(triGramMatrix)), decreasing = TRUE)
+
+topGram_uni <- data.frame(word = names(freq_uni), freq = freq_uni)
+topGram_bi <- data.frame(word = names(freq_bi), freq = freq_bi)
+topGram_tri <- data.frame(word = names(freq_tri), freq = freq_tri)
+```
+
+With the frequency of n-grams now calculated, I can visualize the data:
+
+```{r ngram vis}
+ggplot(topGram_uni[1:50,], aes(reorder(word, -freq_uni), freq_uni)) +
+             labs(x = "Unigrams Words", y = "Frequency") +
+             theme(axis.text.x = element_text(angle = 90, size = 12, hjust = 1)) +
+             labs(title = "Top 50 Unigrams") +
+             geom_bar(stat = "identity")
+```
+
+
+
+
+
